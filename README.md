@@ -134,10 +134,4 @@ the project repository.
 
 ## License:
 
-GPL 3.9
-
-## Acknowledgements:
-
--   AutoHotkey community
--   Microsoft Sysinternals
--   Powershell
+GPL 3.0
