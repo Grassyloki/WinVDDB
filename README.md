@@ -4,6 +4,18 @@ WinVDK is a system for creating a multi-display kiosk experience using
 Windows virtual desktops. It automates setting up virtual desktops,
 launching applications, and cycling through them at regular intervals.
 
+## Features:
+
+-   Automatic creation and management of multiple virtual desktops
+-   Customizable program launching on each virtual desktop
+-   Automated cycling through virtual desktops at configurable intervals
+-   Ability to pause and resume desktop rotation
+-   Custom actions for each desktop (e.g., refreshing a webpage
+    periodically)
+-   Taskbar auto-hide during rotation
+-   Daily system reboot for maintenance
+-   Easy configuration and customization
+
 ## Installation:
 
 1.  Create C:\Scripts folder
@@ -18,8 +30,7 @@ launching applications, and cycling through them at regular intervals.
 
 ## Usage:
 
-Run Run-VirtualDesktopsDisplayBoard.ps1 in PowerShell (admin) to start
-manually.
+Run Run-VirtualDesktopsDisplayBoard.ps1 in PowerShell to start manually.
 
 -   F2: Pause/resume desktop rotation
 -   Taskbar auto-hides during rotation, shows when paused
@@ -40,7 +51,7 @@ Edit Run-VirtualDesktopsDisplayBoard.ps1:
 ## Auto-Start Setup:
 
 1.  Open Task Scheduler
-2.  Create new task, run with highest privileges
+2.  Create new task
 3.  Trigger: At log on
 4.  Action:
     -   Program: powershell.exe
@@ -83,9 +94,26 @@ In DesktopSwitchingFunctions.ahk, modify:
 
 ### Custom Actions Per Desktop:
 
-In DesktopSwitchingFunctions.ahk, edit the desktopActions array:
+In DesktopSwitchingFunctions.ahk, the desktopActions array defines
+actions for each desktop:
 
-    desktopActions.Push({count: 8, action: "Send, {F5}"})  ; Refresh every 8 rotations
+    global desktopActions := []
+    desktopActions.Push({count: 0, action: ""})  ; Desktop 1: No action
+    desktopActions.Push({count: 0, action: ""})  ; Desktop 2: No action
+    desktopActions.Push({count: 0, action: ""})  ; Desktop 3: No action
+    desktopActions.Push({count: 8, action: "Send, {F5}"})  ; Desktop 4: Press F5 every 8 switches
+    desktopActions.Push({count: 0, action: ""})  ; Desktop 5: No action
+    desktopActions.Push({count: 0, action: ""})  ; Desktop 6: No action
+
+This array initializes actions for each desktop. Each entry represents a
+desktop and specifies:
+
+-   `count`: How many rotations before the action is triggered (0 means
+    no action)
+-   `action`: The AutoHotkey command to execute when triggered
+
+In the example, Desktop 4 is set to press F5 (refresh) every 8
+rotations. You can customize these actions for each desktop as needed.
 
 ## Troubleshooting:
 
@@ -97,7 +125,6 @@ In DesktopSwitchingFunctions.ahk, edit the desktopActions array:
 ## Limitations:
 
 -   Designed for Windows 10/11 with virtual desktop support
--   Requires administrator privileges to run
 -   May interfere with normal desktop usage when active
 
 ## Contributing:
@@ -107,10 +134,10 @@ the project repository.
 
 ## License:
 
-\[Specify your chosen license here\]
+GPL 3.9
 
 ## Acknowledgements:
 
 -   AutoHotkey community
 -   Microsoft Sysinternals
--   \[Any other acknowledgements\]
+-   Powershell
