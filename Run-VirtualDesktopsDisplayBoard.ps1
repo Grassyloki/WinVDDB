@@ -54,17 +54,17 @@ try {
     Write-Host "Error loading VirtualDesktop module: $_"
 }
 
-# Check for PowerShell-TOML module
+# Check for PSToml module
 $TomlModuleAvailable = $false
 try {
-    if (Get-Module -Name PowerShell-TOML -ListAvailable) {
-        Import-Module PowerShell-TOML -ErrorAction SilentlyContinue
+    if (Get-Module -Name PSToml -ListAvailable) {
+        Import-Module PSToml -ErrorAction SilentlyContinue
         $TomlModuleAvailable = $true
     } else {
-        Write-Host "PowerShell-TOML module not available. Will use simple parsing."
+        Write-Host "PSToml module not available. Will use simple parsing."
     }
 } catch {
-    Write-Host "Error loading PowerShell-TOML module: $_"
+    Write-Host "Error loading PSToml module: $_"
 }
 
 # Load configuration
@@ -72,7 +72,7 @@ try {
     Write-Host "Loading configuration from $ConfigPath"
     
     if ($TomlModuleAvailable) {
-        $Config = ConvertFrom-Toml -Path $ConfigPath
+        $Config = ConvertFrom-Toml -InputObject (Get-Content -Path $ConfigPath -Raw)
         
         # Extract general settings
         $WorkingDirectory = $Config.general.working_directory
@@ -356,7 +356,7 @@ Loop (requiredCount - currentCount) {
 
 ; Get final count and report
 finalCount := DllCall("VirtualDesktopAccessor\GetDesktopCount")
-FileAppend "Desktop count: " . finalCount . "`n", "*"
+FileAppend("Desktop count: " . finalCount . "`n", "*")
 ExitApp
 "@
     

@@ -30,12 +30,12 @@ if (-not (Test-Path -Path $DllPath)) {
     Exit 1
 }
 
-# Check if PowerShell-TOML module can be installed
+# Check if PSToml module can be installed
 $ModuleInstalled = $false
 try {
     # Try to install the module if not already available
-    if (-not (Get-Module -Name PowerShell-TOML -ListAvailable)) {
-        Write-Host "PowerShell-TOML module not found. Attempting to install..."
+    if (-not (Get-Module -Name PSToml -ListAvailable)) {
+        Write-Host "PSToml module not found. Attempting to install..."
         
         # Check if PSGallery is available and registered
         $repo = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
@@ -45,17 +45,17 @@ try {
         }
         
         # Install the module
-        Install-Module -Name PowerShell-TOML -Scope CurrentUser -Force -AllowClobber -ErrorAction SilentlyContinue
+        Install-Module -Name PSToml -Scope CurrentUser -Force -AllowClobber -ErrorAction SilentlyContinue
         
-        if (Get-Module -Name PowerShell-TOML -ListAvailable) {
+        if (Get-Module -Name PSToml -ListAvailable) {
             $ModuleInstalled = $true
-            Write-Host "PowerShell-TOML module installed successfully."
+            Write-Host "PSToml module installed successfully."
         } else {
-            Write-Host "Unable to install PowerShell-TOML module. Will use manual TOML parsing."
+            Write-Host "Unable to install PSToml module. Will use manual TOML parsing."
         }
     } else {
         $ModuleInstalled = $true
-        Write-Host "PowerShell-TOML module already installed."
+        Write-Host "PSToml module already installed."
     }
 } catch {
     Write-Host "Error during module installation: $_"
@@ -114,10 +114,10 @@ $LogPath = ""
 $VerboseOutput = $false
 
 try {
-    # Try using PowerShell-TOML if installed
+    # Try using PSToml if installed
     if ($ModuleInstalled) {
-        Import-Module PowerShell-TOML
-        $Config = ConvertFrom-Toml -Path $ConfigPath
+        Import-Module PSToml
+        $Config = ConvertFrom-Toml -InputObject (Get-Content -Path $ConfigPath -Raw)
         
         # Extract debug settings if they exist
         if ($Config.ContainsKey("debug")) {

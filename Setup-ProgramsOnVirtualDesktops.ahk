@@ -40,7 +40,7 @@ Main(desktopIndex, program, args, postLaunchKeysJson) {
             }
         } catch Error as e {
             ; Log error if JSON parsing fails
-            FileAppend "Error processing post-launch keys: " e.Message "`n", A_ScriptDir "\error.log"
+            FileAppend("Error processing post-launch keys: " e.Message "`n", A_ScriptDir "\error.log")
         }
     }
     
