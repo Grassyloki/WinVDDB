@@ -2,8 +2,8 @@
 
 # General Settings
 [general]
-# Total number of displays to cycle through (excluding desktop 1)
-total_displays = 5
+# Total number of displays (including desktop 1)
+total_displays = 6
 # The first display number to start cycling from (usually 2 to exclude desktop 1)
 starting_display = 2
 # Duration each desktop is shown (in milliseconds)
@@ -27,24 +27,29 @@ run_winget_upgrade = true
 winget_timeout_minutes = 60
 
 # Desktop Configuration
-# Each desktop has its own configuration section
-# Desktop 1 is excluded from rotation and used for the control panel
+# Each desktop has its own table with [desktop.N] where N is the desktop number
+# Desktop 1 can be configured but is excluded from rotation by default
+
+# Desktop 1 Configuration (optional, not used in rotation)
+[desktop.1]
+enabled = false
+# Desktop 1 is typically used for the control panel and not part of the rotation
 
 # Desktop 2 Configuration
-[[desktop]]
-number = 2
+[desktop.2]
+enabled = true
 program = "firefox.exe"
 arguments = "-new-window --kiosk https://ha.com/lovelace/default_view"
-# Post-launch key sequences
+# Post-launch key sequences - executed right after application launch
 # Format: Array of {keys = "key combination", delay = delay_in_ms}
 post_launch_keys = []
-# Periodic action
+# Periodic action - executed after specified number of rotations
 action_count = 0  # How many rotations before triggering action (0 = never)
 action = ""  # AutoHotkey command to execute
 
 # Desktop 3 Configuration
-[[desktop]]
-number = 3
+[desktop.3]
+enabled = true
 program = "firefox.exe"
 arguments = "-new-window --kiosk http://grafana"
 post_launch_keys = []
@@ -52,8 +57,8 @@ action_count = 0
 action = ""
 
 # Desktop 4 Configuration
-[[desktop]]
-number = 4
+[desktop.4]
+enabled = true
 program = "firefox.exe"
 arguments = "-new-window --kiosk https://www.windy.com/-Radar+-radarPlus"
 post_launch_keys = []
@@ -61,8 +66,8 @@ action_count = 8  # Execute every 8 rotations
 action = "{F5}"  # Refresh the page with F5
 
 # Desktop 5 Configuration
-[[desktop]]
-number = 5
+[desktop.5]
+enabled = true
 program = "powershell.exe"
 arguments = "C:\\Scripts\\Start-MyRadar.ps1"
 post_launch_keys = []
@@ -70,10 +75,54 @@ action_count = 0
 action = ""
 
 # Desktop 6 Configuration
-[[desktop]]
-number = 6
+[desktop.6]
+enabled = true
 program = "firefox.exe"
 arguments = "-new-window --kiosk https://www.flightradar24.com/"
 post_launch_keys = []
 action_count = 0
 action = ""
+
+# Example of a desktop with extensive post-launch keys and periodic actions
+# [desktop.7]
+# enabled = true
+# program = "chrome.exe"
+# arguments = "--start-fullscreen https://example.com"
+# post_launch_keys = [
+#   # Wait 3 seconds, then press Tab to focus on a field
+#   {keys = "{Tab}", delay = 3000},
+#   # Wait 500ms, then type a username
+#   {keys = "username", delay = 500},
+#   # Wait 500ms, then press Tab to move to password field
+#   {keys = "{Tab}", delay = 500},
+#   # Wait 500ms, then type a password
+#   {keys = "password", delay = 500},
+#   # Wait 500ms, then press Enter to submit
+#   {keys = "{Enter}", delay = 500}
+# ]
+# # Press F5 to refresh every 5 rotations
+# action_count = 5
+# action = "{F5}"
+# 
+# # Example of a desktop that opens multiple applications in sequence
+# [desktop.8]
+# enabled = true
+# program = "cmd.exe"
+# arguments = "/c start notepad.exe && start mspaint.exe"
+# post_launch_keys = [
+#   # Activate Notepad window
+#   {keys = "!{Tab}", delay = 2000},
+#   # Type some text
+#   {keys = "This is an example text", delay = 500},
+#   # Switch to Paint
+#   {keys = "!{Tab}", delay = 1000}
+# ]
+# # Every 6 rotations, press Ctrl+S to save
+# action_count = 6
+# action = "^s"
+# 
+# # Example of disabling a desktop from rotation
+# [desktop.9]
+# enabled = false
+# program = "explorer.exe"
+# arguments = ""

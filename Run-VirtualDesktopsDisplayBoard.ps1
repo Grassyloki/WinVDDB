@@ -48,15 +48,28 @@ global desktopIndex := startingDisplay
     # Create desktop actions array for AHK v2
     $desktopActionsContent = "global desktopActions := [`n"
     
-    # Add Desktop 1 (not used)
-    $desktopActionsContent += "    Map('count', 0, 'action', ''),`n"
-    
     # Process desktop configs
-    foreach ($desktop in $Config.desktop) {
-        # Add to desktop actions
-        $actionCount = $desktop.action_count
-        $action = $desktop.action
-        $desktopActionsContent += "    Map('count', $actionCount, 'action', '$action'),`n"
+    for ($i = 1; $i -le $TotalDisplays; $i++) {
+        $desktopKey = "desktop.$i"
+        
+        if ($Config.ContainsKey($desktopKey)) {
+            $desktopConfig = $Config[$desktopKey]
+            $actionCount = 0
+            $action = ""
+            
+            if ($desktopConfig.ContainsKey("action_count")) {
+                $actionCount = $desktopConfig.action_count
+            }
+            
+            if ($desktopConfig.ContainsKey("action")) {
+                $action = $desktopConfig.action
+            }
+            
+            $desktopActionsContent += "    Map('count', $actionCount, 'action', '$action'),`n"
+        } else {
+            # Default empty action for desktops without configuration
+            $desktopActionsContent += "    Map('count', 0, 'action', ''),`n"
+        }
     }
     
     # Close the array
@@ -104,7 +117,7 @@ function Ensure-VirtualDesktops {
 }
 
 # Set the number of required virtual desktops based on config
-$numberOfDesktops = $TotalDisplays + 1  # +1 for desktop 1
+$numberOfDesktops = $TotalDisplays
 Ensure-VirtualDesktops -requiredCount $numberOfDesktops
 
 function OpenOnDesktop {
@@ -135,8 +148,35 @@ function OpenOnDesktop {
 }
 
 # Launch programs on each desktop based on configuration
-foreach ($desktop in $Config.desktop) {
-    OpenOnDesktop -desktop $desktop.number -program $desktop.program -arguments $desktop.arguments -postLaunchKeys $desktop.post_launch_keys
+for ($i = 1; $i -le $TotalDisplays; $i++) {
+    $desktopKey = "desktop.$i"
+    
+    if ($Config.ContainsKey($desktopKey)) {
+        $desktopConfig = $Config[$desktopKey]
+        
+        # Skip disabled desktops or desktop 1 (if starting from 2)
+        if (($desktopConfig.ContainsKey("enabled") -and $desktopConfig.enabled -eq $false) -or 
+            ($i -eq 1 -and $StartingDisplay -gt 1)) {
+            Write-Host "Skipping desktop $i - disabled or excluded from rotation"
+            continue
+        }
+        
+        if ($desktopConfig.ContainsKey("program") -and $desktopConfig.program -ne "") {
+            $program = $desktopConfig.program
+            $arguments = ""
+            $postLaunchKeys = @()
+            
+            if ($desktopConfig.ContainsKey("arguments")) {
+                $arguments = $desktopConfig.arguments
+            }
+            
+            if ($desktopConfig.ContainsKey("post_launch_keys")) {
+                $postLaunchKeys = $desktopConfig.post_launch_keys
+            }
+            
+            OpenOnDesktop -desktop $i -program $program -arguments $arguments -postLaunchKeys $postLaunchKeys
+        }
+    }
 }
 
 # Enable Taskbar auto-hide

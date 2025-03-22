@@ -45,45 +45,49 @@ Run Launch-DisplayBoard.ps1 in PowerShell to start manually.
 
 ## Configuration:
 
-The main configuration is in the config.toml file. This file controls:
+The main configuration is in the config.toml file. This file controls all aspects of WinVDDB through a structured format:
 
--   Total number of desktops
--   Display time per desktop
--   Programs to launch on each desktop
--   Post-launch key sequences for each program
--   Custom actions per desktop (like refreshing)
--   Daily reboot settings including winget upgrades
-
-Example configuration (config.toml.example):
-
+### General Settings
 ```toml
-# General Settings
 [general]
-total_displays = 5
-starting_display = 2
-display_time = 120000  # milliseconds
+total_displays = 6  # Total number of displays (including desktop 1)
+starting_display = 2  # First display to start cycling from (usually 2 to skip desktop 1)
+display_time = 120000  # Duration for each desktop in milliseconds
 dll_path = "C:\\Scripts\\VirtualDesktopAccessor.dll"
 ahk_path = "C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe"
 working_directory = "C:\\Scripts"
+```
 
-# Daily Reboot Settings
+### Reboot Settings
+```toml
 [reboot]
 enabled = true
 reboot_hour = 8
 run_winget_upgrade = true
 winget_timeout_minutes = 60
-
-# Example Desktop Configuration
-[[desktop]]
-number = 2
-program = "firefox.exe"
-arguments = "-new-window --kiosk https://example.com"
-post_launch_keys = [
-  {keys = "{F11}", delay = 3000}
-]
-action_count = 8
-action = "{F5}"
 ```
+
+### Desktop-Specific Settings
+Each desktop has its own configuration table with the format `[desktop.N]` where N is the desktop number:
+
+```toml
+[desktop.4]
+enabled = true
+program = "firefox.exe"
+arguments = "-new-window --kiosk https://www.windy.com/-Radar+-radarPlus"
+post_launch_keys = []
+action_count = 8  # Execute every 8 rotations
+action = "{F5}"  # Refresh the page with F5
+```
+
+#### Available Desktop Options:
+- `enabled`: Whether this desktop should be included in rotation
+- `program`: The program to launch on this desktop
+- `arguments`: Command-line arguments for the program
+- `post_launch_keys`: Array of key sequences to send after launching the program
+  - Format: `[{keys = "key combination", delay = delay_in_ms}, ...]`
+- `action_count`: How many rotations before triggering the periodic action
+- `action`: The AutoHotkey key sequence to send periodically
 
 ## Auto-Start Setup:
 
@@ -132,6 +136,50 @@ This project utilizes AutoHotkey v2, which has several syntax differences compar
 - Commands (like Send, MsgBox) are now functions - no more comma parameters
 - New Buffer class replaces VarSetCapacity
 - Maps are used instead of objects for associative arrays
+
+## Configuration Examples:
+
+### Login Form Automation
+```toml
+[desktop.7]
+enabled = true
+program = "chrome.exe"
+arguments = "--start-fullscreen https://example.com/login"
+post_launch_keys = [
+  # Wait 3 seconds, then press Tab to focus on a field
+  {keys = "{Tab}", delay = 3000},
+  # Wait 500ms, then type a username
+  {keys = "username", delay = 500},
+  # Wait 500ms, then press Tab to move to password field
+  {keys = "{Tab}", delay = 500},
+  # Wait 500ms, then type a password
+  {keys = "password", delay = 500},
+  # Wait 500ms, then press Enter to submit
+  {keys = "{Enter}", delay = 500}
+]
+# Press F5 to refresh every 5 rotations
+action_count = 5
+action = "{F5}"
+```
+
+### Running Multiple Applications on One Desktop
+```toml
+[desktop.8]
+enabled = true
+program = "cmd.exe"
+arguments = "/c start notepad.exe && start mspaint.exe"
+post_launch_keys = [
+  # Activate Notepad window
+  {keys = "!{Tab}", delay = 2000},
+  # Type some text
+  {keys = "This is an example text", delay = 500},
+  # Switch to Paint
+  {keys = "!{Tab}", delay = 1000}
+]
+# Every 6 rotations, press Ctrl+S to save
+action_count = 6
+action = "^s"
+```
 
 ## Troubleshooting:
 

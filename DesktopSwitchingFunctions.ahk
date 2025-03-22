@@ -17,8 +17,8 @@ if !DllCall("LoadLibrary", "Str", dllPath) {
     ExitApp
 }
 
-; Initialize desktop switch count array
-Loop totalDisplays + 1 {
+; Initialize desktop switch count array (for all desktops, 1-based)
+Loop totalDisplays {
     desktopSwitchCount.Push(0)
 }
 
@@ -51,17 +51,22 @@ RotateDesktops() {
         desktopSwitchCount[desktopIndex] += 1
 
         ; Check if we need to perform an action for this desktop
-        if (desktopActions[desktopIndex].count > 0 && desktopSwitchCount[desktopIndex] >= desktopActions[desktopIndex].count) {
+        if (desktopIndex <= desktopActions.Length && 
+            desktopActions[desktopIndex].HasOwnProp("count") && 
+            desktopActions[desktopIndex].count > 0 && 
+            desktopSwitchCount[desktopIndex] >= desktopActions[desktopIndex].count) {
+            
             desktopSwitchCount[desktopIndex] := 0  ; Reset the count
-            if (desktopActions[desktopIndex].action != "") {
-                if (desktopActions[desktopIndex].action) {
-                    Send desktopActions[desktopIndex].action
-                }
+            
+            if (desktopActions[desktopIndex].HasOwnProp("action") && 
+                desktopActions[desktopIndex].action != "") {
+                Send desktopActions[desktopIndex].action
             }
         }
 
         ; Increment and wrap around desktop index
-        desktopIndex := (desktopIndex >= (startingDisplay + totalDisplays - 1)) ? startingDisplay : (desktopIndex + 1)
+        desktopIndex := (desktopIndex >= (startingDisplay + totalDisplays - startingDisplay)) ? 
+                        startingDisplay : (desktopIndex + 1)
     }
 }
 
@@ -104,7 +109,7 @@ GoToDesktopManual(ThisHotkey) {
         keyPressed := SubStr(ThisHotkey, 1, 1)
         
         ; Only proceed if the key corresponds to a valid desktop
-        if (keyPressed >= 2 && keyPressed <= totalDisplays + 1) {
+        if (keyPressed >= 1 && keyPressed <= totalDisplays) {
             manualDesktop := keyPressed
             manualDesktopTimeout := 60  ; Set timeout to 60 minutes
             
