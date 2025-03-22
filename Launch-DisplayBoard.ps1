@@ -2,13 +2,6 @@
 # Launcher script for the Windows Virtual Desktop Display Board
 # This script activates on Virtual Desktop 1 and launches the main script
 
-# Import required modules
-Import-Module VirtualDesktop
-
-# Ensure we're on desktop 1
-Write-Host "Switching to Virtual Desktop 1..."
-Set-DesktopIndex -Index 0  # Desktop index is 0-based, so 0 is the first desktop
-
 # Set the working directory
 $WorkingDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $WorkingDirectory
@@ -30,6 +23,65 @@ if (-not (Test-Path -Path $DllPath)) {
     Write-Host "Please ensure all required files are in the working directory."
     Write-Host "Aborting launch..."
     Exit 1
+}
+
+# Check if PowerShell-TOML module can be installed
+$ModuleInstalled = $false
+try {
+    # Try to install the module if not already available
+    if (-not (Get-Module -Name PowerShell-TOML -ListAvailable)) {
+        Write-Host "PowerShell-TOML module not found. Attempting to install..."
+        
+        # Check if PSGallery is available and registered
+        $repo = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+        if (-not $repo) {
+            Write-Host "PSGallery not found. Registering PSGallery..."
+            Register-PSRepository -Default -ErrorAction SilentlyContinue
+        }
+        
+        # Install the module
+        Install-Module -Name PowerShell-TOML -Scope CurrentUser -Force -AllowClobber -ErrorAction SilentlyContinue
+        
+        if (Get-Module -Name PowerShell-TOML -ListAvailable) {
+            $ModuleInstalled = $true
+            Write-Host "PowerShell-TOML module installed successfully."
+        } else {
+            Write-Host "Unable to install PowerShell-TOML module. Will use manual TOML parsing."
+        }
+    } else {
+        $ModuleInstalled = $true
+        Write-Host "PowerShell-TOML module already installed."
+    }
+} catch {
+    Write-Host "Error during module installation: $_"
+    Write-Host "Will use manual TOML parsing instead."
+}
+
+# Function to manually extract value from TOML for basic debug settings
+function Get-SimpleTomlValue {
+    param (
+        [string]$FilePath,
+        [string]$Key
+    )
+    
+    try {
+        $content = Get-Content -Path $FilePath -Raw
+        $pattern = "(?m)^\s*$Key\s*=\s*(true|false|\d+|""[^""]*"")"
+        if ($content -match $pattern) {
+            $value = $matches[1]
+            
+            # Convert string to appropriate type
+            if ($value -eq "true") { return $true }
+            elseif ($value -eq "false") { return $false }
+            elseif ($value -match '^\d+$') { return [int]$value }
+            elseif ($value -match '^"(.*)"$') { return $matches[1] }
+            else { return $value }
+        }
+        return $null
+    } catch {
+        Write-Host "Error reading TOML value: $_"
+        return $null
+    }
 }
 
 # Check for config file
@@ -54,24 +106,26 @@ $DebugEnabled = $false
 $KeepWindowsOpen = $false
 
 try {
-    # Check for the Powershell-TOML module and install if not present
-    if (-not (Get-Module -Name Powershell-TOML -ListAvailable)) {
-        Write-Host "Powershell-TOML module not found. Installing..."
-        Install-Module -Name Powershell-TOML -Force -Scope CurrentUser
-    }
-    Import-Module Powershell-TOML
-    
-    # Load configuration to check for debug settings
-    $Config = ConvertFrom-Toml -Path $ConfigPath
-    
-    # Extract debug settings if they exist
-    if ($Config.ContainsKey("debug")) {
-        if ($Config.debug.ContainsKey("enabled")) {
-            $DebugEnabled = $Config.debug.enabled
-        }
+    # Try using PowerShell-TOML if installed
+    if ($ModuleInstalled) {
+        Import-Module PowerShell-TOML
+        $Config = ConvertFrom-Toml -Path $ConfigPath
         
-        if ($DebugEnabled -and $Config.debug.ContainsKey("keep_windows_open")) {
-            $KeepWindowsOpen = $Config.debug.keep_windows_open
+        # Extract debug settings if they exist
+        if ($Config.ContainsKey("debug")) {
+            if ($Config.debug.ContainsKey("enabled")) {
+                $DebugEnabled = $Config.debug.enabled
+            }
+            
+            if ($DebugEnabled -and $Config.debug.ContainsKey("keep_windows_open")) {
+                $KeepWindowsOpen = $Config.debug.keep_windows_open
+            }
+        }
+    } else {
+        # Fall back to basic parsing
+        $DebugEnabled = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.enabled"
+        if ($DebugEnabled) {
+            $KeepWindowsOpen = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.keep_windows_open"
         }
     }
 } catch {

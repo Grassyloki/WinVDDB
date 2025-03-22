@@ -18,6 +18,7 @@ launching applications, and cycling through them at regular intervals.
 -   Daily system reboot with automatic updates via winget
 -   Easy configuration via TOML configuration file
 -   Debug mode with logging and window persistence
+-   Fallback mechanisms for missing PowerShell modules
 
 ## Installation:
 
@@ -33,7 +34,9 @@ launching applications, and cycling through them at regular intervals.
     -   config.toml (copied and configured from config.toml.example)
 3.  Install AutoHotkey v2 from
     [autohotkey.com](https://www.autohotkey.com)
-4.  Install required PowerShell modules: VirtualDesktop and Powershell-TOML
+4.  Optional: Install PowerShell modules (not required, fallback mechanisms are provided):
+    - The script will attempt to auto-install PowerShell-TOML if needed
+    - VirtualDesktop module is not required (replaced with AutoHotkey functions)
 
 ## Usage:
 
@@ -100,6 +103,20 @@ action = "{F5}"  # Refresh the page with F5
 - `action_count`: How many rotations before triggering the periodic action
 - `action`: The AutoHotkey key sequence to send periodically
 
+## Handling Missing PowerShell Modules
+
+WinVDDB has built-in fallback mechanisms to handle missing PowerShell modules:
+
+### PowerShell-TOML Module (recommended but not required)
+- The script will attempt to auto-install PowerShell-TOML if missing
+- If auto-installation fails, the script uses a simple regex parser for basic TOML functionality
+- Complex TOML features like arrays of objects may not work with the simple parser
+
+### VirtualDesktop Module (not required)
+- The script uses AutoHotkey and VirtualDesktopAccessor.dll to manage virtual desktops
+- No PowerShell VirtualDesktop module is required
+- This makes the application more portable and easier to set up
+
 ## Debugging:
 
 The debug settings in config.toml allow you to troubleshoot issues:
@@ -143,8 +160,7 @@ Example log file names:
 
 ## File Descriptions:
 
-1.  Launch-DisplayBoard.ps1: Launcher script that switches to desktop 1
-    and starts the main script.
+1.  Launch-DisplayBoard.ps1: Launcher script that sets up the environment and starts the main script.
 2.  Run-VirtualDesktopsDisplayBoard.ps1: Main script that initializes
     the system, creates virtual desktops, and launches programs.
 3.  DesktopSwitchingFunctions.ahk: Handles desktop rotation,
@@ -217,12 +233,15 @@ action = "^s"
 ## Troubleshooting:
 
 -   Ensure all scripts are in C:\Scripts
--   Check Windows PowerShell execution policy
+-   Check Windows PowerShell execution policy (`Get-ExecutionPolicy` should be `RemoteSigned` or `Bypass`)
 -   Verify AutoHotkey v2 is installed correctly
 -   Ensure VirtualDesktopAccessor.dll is present and accessible
--   Make sure the Powershell-TOML module is installed
 -   Enable debug mode in config.toml to keep windows open and enable logging
 -   Check transcript logs for detailed error information
+-   If you get module-related errors:
+    - The script should handle missing modules automatically
+    - If PowerShell-TOML fails to install, complex TOML features may not work
+    - The VirtualDesktop module is not required as all functionality is handled by AutoHotkey
 
 ## Limitations:
 

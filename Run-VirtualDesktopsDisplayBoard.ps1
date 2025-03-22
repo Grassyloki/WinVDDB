@@ -14,52 +14,128 @@ $VerboseOutput = $false
 
 Write-Host "Starting Windows Virtual Desktop Display Board"
 
-# Import required modules
-if (-not (Get-Module -Name VirtualDesktop -ListAvailable)) {
-    Write-Host "VirtualDesktop module not found. Installing..."
-    Install-Module -Name VirtualDesktop -Force -Scope CurrentUser
+# Function to manually extract value from TOML for basic settings
+function Get-SimpleTomlValue {
+    param (
+        [string]$FilePath,
+        [string]$Key,
+        [object]$DefaultValue = $null
+    )
+    
+    try {
+        $content = Get-Content -Path $FilePath -Raw
+        $pattern = "(?m)^\s*$Key\s*=\s*(true|false|\d+|""[^""]*"")"
+        if ($content -match $pattern) {
+            $value = $matches[1]
+            
+            # Convert string to appropriate type
+            if ($value -eq "true") { return $true }
+            elseif ($value -eq "false") { return $false }
+            elseif ($value -match '^\d+$') { return [int]$value }
+            elseif ($value -match '^"(.*)"$') { return $matches[1] }
+            else { return $value }
+        }
+        return $DefaultValue
+    } catch {
+        Write-Host "Error reading TOML value: $_"
+        return $DefaultValue
+    }
 }
-Import-Module VirtualDesktop
 
-# Check for the Powershell-TOML module and install if not present
-if (-not (Get-Module -Name Powershell-TOML -ListAvailable)) {
-    Write-Host "Powershell-TOML module not found. Installing..."
-    Install-Module -Name Powershell-TOML -Force -Scope CurrentUser
+# Check for VirtualDesktop module - but we won't use it directly for desktop count
+# We'll use ahk instead
+$VirtualDesktopModuleAvailable = $false
+try {
+    if (Get-Module -Name VirtualDesktop -ListAvailable) {
+        Import-Module VirtualDesktop -ErrorAction SilentlyContinue
+        $VirtualDesktopModuleAvailable = $true
+    } else {
+        Write-Host "VirtualDesktop module not available. Will use alternative methods."
+    }
+} catch {
+    Write-Host "Error loading VirtualDesktop module: $_"
 }
-Import-Module Powershell-TOML
+
+# Check for PowerShell-TOML module
+$TomlModuleAvailable = $false
+try {
+    if (Get-Module -Name PowerShell-TOML -ListAvailable) {
+        Import-Module PowerShell-TOML -ErrorAction SilentlyContinue
+        $TomlModuleAvailable = $true
+    } else {
+        Write-Host "PowerShell-TOML module not available. Will use simple parsing."
+    }
+} catch {
+    Write-Host "Error loading PowerShell-TOML module: $_"
+}
 
 # Load configuration
 try {
     Write-Host "Loading configuration from $ConfigPath"
-    $Config = ConvertFrom-Toml -Path $ConfigPath
     
-    # Extract general settings
-    $WorkingDirectory = $Config.general.working_directory
-    $TotalDisplays = $Config.general.total_displays
-    $StartingDisplay = $Config.general.starting_display
-    $DllPath = $Config.general.dll_path
-    $AhkPath = $Config.general.ahk_path
+    if ($TomlModuleAvailable) {
+        $Config = ConvertFrom-Toml -Path $ConfigPath
+        
+        # Extract general settings
+        $WorkingDirectory = $Config.general.working_directory
+        $TotalDisplays = $Config.general.total_displays
+        $StartingDisplay = $Config.general.starting_display
+        $DllPath = $Config.general.dll_path
+        $AhkPath = $Config.general.ahk_path
+        
+        # Extract debug settings if they exist
+        if ($Config.ContainsKey("debug")) {
+            if ($Config.debug.ContainsKey("enabled")) {
+                $DebugEnabled = $Config.debug.enabled
+            }
+            
+            if ($DebugEnabled -and $Config.debug.ContainsKey("transcript_logging")) {
+                $TranscriptLogging = $Config.debug.transcript_logging
+            }
+            
+            if ($DebugEnabled -and $Config.debug.ContainsKey("log_path")) {
+                $LogPath = $Config.debug.log_path
+            }
+            
+            if ($DebugEnabled -and $Config.debug.ContainsKey("keep_windows_open")) {
+                $KeepWindowsOpen = $Config.debug.keep_windows_open
+            }
+            
+            if ($DebugEnabled -and $Config.debug.ContainsKey("verbose")) {
+                $VerboseOutput = $Config.debug.verbose
+            }
+        }
+    } else {
+        # Use simple parsing
+        $WorkingDirectory = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.working_directory" -DefaultValue "C:\Scripts"
+        $TotalDisplays = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.total_displays" -DefaultValue 6
+        $StartingDisplay = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.starting_display" -DefaultValue 2
+        $DllPath = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.dll_path" -DefaultValue "C:\Scripts\VirtualDesktopAccessor.dll"
+        $AhkPath = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.ahk_path" -DefaultValue "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
+        
+        # Extract debug settings
+        $DebugEnabled = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.enabled" -DefaultValue $false
+        if ($DebugEnabled) {
+            $TranscriptLogging = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.transcript_logging" -DefaultValue $false
+            $LogPath = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.log_path" -DefaultValue ""
+            $KeepWindowsOpen = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.keep_windows_open" -DefaultValue $false
+            $VerboseOutput = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.verbose" -DefaultValue $false
+        }
+    }
     
-    # Extract debug settings if they exist
-    if ($Config.ContainsKey("debug")) {
-        if ($Config.debug.ContainsKey("enabled")) {
-            $DebugEnabled = $Config.debug.enabled
-        }
-        
-        if ($DebugEnabled -and $Config.debug.ContainsKey("transcript_logging")) {
-            $TranscriptLogging = $Config.debug.transcript_logging
-        }
-        
-        if ($DebugEnabled -and $Config.debug.ContainsKey("log_path")) {
-            $LogPath = $Config.debug.log_path
-        }
-        
-        if ($DebugEnabled -and $Config.debug.ContainsKey("keep_windows_open")) {
-            $KeepWindowsOpen = $Config.debug.keep_windows_open
-        }
-        
-        if ($DebugEnabled -and $Config.debug.ContainsKey("verbose")) {
-            $VerboseOutput = $Config.debug.verbose
+    # If working directory is not the current directory, update it
+    if ($WorkingDirectory -ne (Get-Location).Path) {
+        try {
+            if (Test-Path -Path $WorkingDirectory) {
+                Set-Location -Path $WorkingDirectory
+                Write-Host "Changed working directory to: $WorkingDirectory"
+            } else {
+                Write-Host "Warning: Configured working directory '$WorkingDirectory' does not exist. Using current directory."
+                $WorkingDirectory = (Get-Location).Path
+            }
+        } catch {
+            Write-Host "Error changing working directory: $_"
+            $WorkingDirectory = (Get-Location).Path
         }
     }
     
@@ -103,7 +179,7 @@ global desktopIndex := startingDisplay
     for ($i = 1; $i -le $TotalDisplays; $i++) {
         $desktopKey = "desktop.$i"
         
-        if ($Config.ContainsKey($desktopKey)) {
+        if ($TomlModuleAvailable -and $Config.ContainsKey($desktopKey)) {
             $desktopConfig = $Config[$desktopKey]
             $actionCount = 0
             $action = ""
@@ -118,8 +194,10 @@ global desktopIndex := startingDisplay
             
             $desktopActionsContent += "    Map('count', $actionCount, 'action', '$action'),`n"
         } else {
-            # Default empty action for desktops without configuration
-            $desktopActionsContent += "    Map('count', 0, 'action', ''),`n"
+            # Use simple parsing for desktop action
+            $actionCount = Get-SimpleTomlValue -FilePath $ConfigPath -Key "desktop.$i.action_count" -DefaultValue 0
+            $action = Get-SimpleTomlValue -FilePath $ConfigPath -Key "desktop.$i.action" -DefaultValue ""
+            $desktopActionsContent += "    Map('count', $actionCount, 'action', '$action'),`n"
         }
     }
     
@@ -144,11 +222,24 @@ global desktopIndex := startingDisplay
 }
 
 # Start daily reboot task if enabled
-if ($Config.reboot.enabled -eq $true) {
-    $rebootParams = @{
-        RebootHour = $Config.reboot.reboot_hour
-        RunWingetUpgrade = $Config.reboot.run_winget_upgrade
-        WingetTimeout = $Config.reboot.winget_timeout_minutes
+$RebootEnabled = $false
+if ($TomlModuleAvailable -and $Config.ContainsKey("reboot") -and $Config.reboot.ContainsKey("enabled")) {
+    $RebootEnabled = $Config.reboot.enabled
+} else {
+    $RebootEnabled = Get-SimpleTomlValue -FilePath $ConfigPath -Key "reboot.enabled" -DefaultValue $false
+}
+
+if ($RebootEnabled) {
+    $rebootParams = @{}
+    
+    if ($TomlModuleAvailable) {
+        $rebootParams.Add("RebootHour", $Config.reboot.reboot_hour)
+        $rebootParams.Add("RunWingetUpgrade", $Config.reboot.run_winget_upgrade)
+        $rebootParams.Add("WingetTimeout", $Config.reboot.winget_timeout_minutes)
+    } else {
+        $rebootParams.Add("RebootHour", (Get-SimpleTomlValue -FilePath $ConfigPath -Key "reboot.reboot_hour" -DefaultValue 8))
+        $rebootParams.Add("RunWingetUpgrade", (Get-SimpleTomlValue -FilePath $ConfigPath -Key "reboot.run_winget_upgrade" -DefaultValue $true))
+        $rebootParams.Add("WingetTimeout", (Get-SimpleTomlValue -FilePath $ConfigPath -Key "reboot.winget_timeout_minutes" -DefaultValue 60))
     }
     
     # Add debug parameters if debug is enabled
@@ -209,19 +300,51 @@ if ($Config.reboot.enabled -eq $true) {
     Start-Sleep 5
 }
 
-# Ensure the required number of virtual desktops exists
+# We'll use AHK to create virtual desktops since the module might not be available
+# This function creates a simple AHK script to create virtual desktops
 function Ensure-VirtualDesktops {
     param ([int]$requiredCount)
 
-    $currentCount = (Get-DesktopCount)
-    Write-Host "Initial desktop count: $currentCount"
+    Write-Host "Creating $requiredCount virtual desktops using AutoHotkey"
     
-    while ($currentCount -lt $requiredCount) {
-        Write-Host "Creating new desktop. Current count: $currentCount"
-        New-Desktop
-        Start-Sleep -Seconds 2 # Allow time for the desktop to initialize
-        $currentCount = (Get-DesktopCount)
-    }
+    # Create a temporary AHK script to create desktops
+    $tempAhkPath = "$WorkingDirectory\temp_create_desktops.ahk"
+    $createDesktopsScript = @"
+#SingleInstance Force
+
+; Load the VirtualDesktopAccessor.dll
+dllPath := "$DllPath"
+if !DllCall("LoadLibrary", "Str", dllPath) {
+    MsgBox "Failed to load VirtualDesktopAccessor.dll"
+    ExitApp
+}
+
+; Get current desktop count
+currentCount := DllCall("VirtualDesktopAccessor\GetDesktopCount")
+requiredCount := $requiredCount
+
+; Create new desktops if needed
+Loop (requiredCount - currentCount) {
+    if (A_Index <= 0)
+        break
+    DllCall("VirtualDesktopAccessor\CreateDesktop")
+    Sleep 500
+}
+
+; Get final count and report
+finalCount := DllCall("VirtualDesktopAccessor\GetDesktopCount")
+FileAppend "Desktop count: " . finalCount . "`n", "*"
+ExitApp
+"@
+    
+    Set-Content -Path $tempAhkPath -Value $createDesktopsScript
+    
+    # Run the AHK script
+    $output = & $AhkPath $tempAhkPath
+    Write-Host $output
+    
+    # Clean up the temporary script
+    Remove-Item -Path $tempAhkPath -ErrorAction SilentlyContinue
 }
 
 # Set the number of required virtual desktops based on config
@@ -239,7 +362,11 @@ function OpenOnDesktop {
     $ahkScript = "$WorkingDirectory\Setup-ProgramsOnVirtualDesktops.ahk"
     
     # Convert post-launch keys to JSON string for passing to AHK
-    $keysJson = ConvertTo-Json -Compress $postLaunchKeys
+    $keysJson = if ($postLaunchKeys.Count -gt 0) {
+        ConvertTo-Json -Compress $postLaunchKeys
+    } else {
+        '[]'
+    }
     $cmdArgs = "$desktop ""$program"" ""$arguments"" ""$keysJson"""
 
     if ($VerboseOutput) {
@@ -268,32 +395,55 @@ function OpenOnDesktop {
 # Launch programs on each desktop based on configuration
 for ($i = 1; $i -le $TotalDisplays; $i++) {
     $desktopKey = "desktop.$i"
+    $desktopEnabled = $true
+    $program = ""
+    $arguments = ""
+    $postLaunchKeys = @()
     
-    if ($Config.ContainsKey($desktopKey)) {
+    if ($TomlModuleAvailable -and $Config.ContainsKey($desktopKey)) {
         $desktopConfig = $Config[$desktopKey]
         
+        # Check if desktop is enabled
+        if ($desktopConfig.ContainsKey("enabled")) {
+            $desktopEnabled = $desktopConfig.enabled
+        }
+        
         # Skip disabled desktops or desktop 1 (if starting from 2)
-        if (($desktopConfig.ContainsKey("enabled") -and $desktopConfig.enabled -eq $false) -or 
-            ($i -eq 1 -and $StartingDisplay -gt 1)) {
+        if (!$desktopEnabled -or ($i -eq 1 -and $StartingDisplay -gt 1)) {
             Write-Host "Skipping desktop $i - disabled or excluded from rotation"
             continue
         }
         
-        if ($desktopConfig.ContainsKey("program") -and $desktopConfig.program -ne "") {
+        if ($desktopConfig.ContainsKey("program")) {
             $program = $desktopConfig.program
-            $arguments = ""
-            $postLaunchKeys = @()
-            
-            if ($desktopConfig.ContainsKey("arguments")) {
-                $arguments = $desktopConfig.arguments
-            }
-            
-            if ($desktopConfig.ContainsKey("post_launch_keys")) {
-                $postLaunchKeys = $desktopConfig.post_launch_keys
-            }
-            
-            OpenOnDesktop -desktop $i -program $program -arguments $arguments -postLaunchKeys $postLaunchKeys
         }
+        
+        if ($desktopConfig.ContainsKey("arguments")) {
+            $arguments = $desktopConfig.arguments
+        }
+        
+        if ($desktopConfig.ContainsKey("post_launch_keys")) {
+            $postLaunchKeys = $desktopConfig.post_launch_keys
+        }
+    } else {
+        # Use simple parsing
+        $desktopEnabled = Get-SimpleTomlValue -FilePath $ConfigPath -Key "desktop.$i.enabled" -DefaultValue $true
+        
+        # Skip disabled desktops or desktop 1 (if starting from 2)
+        if (!$desktopEnabled -or ($i -eq 1 -and $StartingDisplay -gt 1)) {
+            Write-Host "Skipping desktop $i - disabled or excluded from rotation"
+            continue
+        }
+        
+        $program = Get-SimpleTomlValue -FilePath $ConfigPath -Key "desktop.$i.program" -DefaultValue ""
+        $arguments = Get-SimpleTomlValue -FilePath $ConfigPath -Key "desktop.$i.arguments" -DefaultValue ""
+        
+        # We can't easily parse arrays with simple regex, so just use empty array
+        $postLaunchKeys = @()
+    }
+    
+    if ($program -ne "") {
+        OpenOnDesktop -desktop $i -program $program -arguments $arguments -postLaunchKeys $postLaunchKeys
     }
 }
 
