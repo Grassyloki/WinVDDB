@@ -14,6 +14,24 @@ $WorkingDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $WorkingDirectory
 Write-Host "Working directory set to: $WorkingDirectory"
 
+# Check for required dependencies
+$AhkPath = "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
+if (-not (Test-Path -Path $AhkPath)) {
+    Write-Host "AutoHotkey v2 not found at expected path: $AhkPath"
+    Write-Host "Please install AutoHotkey v2 from https://www.autohotkey.com/download/2.0/"
+    Write-Host "Aborting launch..."
+    Exit 1
+}
+
+# Check for VirtualDesktopAccessor.dll
+$DllPath = Join-Path -Path $WorkingDirectory -ChildPath "VirtualDesktopAccessor.dll"
+if (-not (Test-Path -Path $DllPath)) {
+    Write-Host "VirtualDesktopAccessor.dll not found at: $DllPath"
+    Write-Host "Please ensure all required files are in the working directory."
+    Write-Host "Aborting launch..."
+    Exit 1
+}
+
 # Check for config file
 $ConfigPath = Join-Path -Path $WorkingDirectory -ChildPath "config.toml"
 if (-not (Test-Path -Path $ConfigPath)) {

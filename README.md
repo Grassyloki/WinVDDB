@@ -30,7 +30,7 @@ launching applications, and cycling through them at regular intervals.
     -   VirtualDesktopAccessor.dll
     -   JSON.ahk
     -   config.toml (copied and configured from config.toml.example)
-3.  Install AutoHotkey v1.1 or later from
+3.  Install AutoHotkey v2 from
     [autohotkey.com](https://www.autohotkey.com)
 4.  Install required PowerShell modules: VirtualDesktop and Powershell-TOML
 
@@ -63,7 +63,7 @@ total_displays = 5
 starting_display = 2
 display_time = 120000  # milliseconds
 dll_path = "C:\\Scripts\\VirtualDesktopAccessor.dll"
-ahk_path = "C:\\Program Files\\AutoHotkey\\v1.1.37.02\\AutoHotkeyU64.exe"
+ahk_path = "C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe"
 working_directory = "C:\\Scripts"
 
 # Daily Reboot Settings
@@ -119,28 +119,32 @@ action = "{F5}"
     reboots for maintenance.
 6.  VirtualDesktopAccessor.dll: Required DLL for interacting with
     Windows virtual desktops.
-7.  JSON.ahk: JSON parsing library for AHK.
+7.  JSON.ahk: JSON parsing library for AutoHotkey v2.
 8.  config.toml: Configuration file for all settings.
 
-## New Features in This Version:
+## AutoHotkey v2 Usage:
 
-- TOML configuration file for all settings
-- Number key (2-9) shortcuts to manually select a desktop
-- Post-launch key sequences for applications
-- Winget upgrades before system reboot
-- Launcher script that activates on desktop 1
+This project utilizes AutoHotkey v2, which has several syntax differences compared to v1:
+
+- Function calls now use parentheses: `FunctionName(param1, param2)` instead of commas
+- Object syntax has changed, using standard `obj.prop` notation
+- Cleaner error handling with `try`/`catch Error as e`
+- Commands (like Send, MsgBox) are now functions - no more comma parameters
+- New Buffer class replaces VarSetCapacity
+- Maps are used instead of objects for associative arrays
 
 ## Troubleshooting:
 
 -   Ensure all scripts are in C:\Scripts
 -   Check Windows PowerShell execution policy
--   Verify AutoHotkey is installed correctly
+-   Verify AutoHotkey v2 is installed correctly
 -   Ensure VirtualDesktopAccessor.dll is present and accessible
 -   Make sure the Powershell-TOML module is installed
 
 ## Limitations:
 
 -   Designed for Windows 10/11 with virtual desktop support
+-   Requires AutoHotkey v2
 -   May interfere with normal desktop usage when active
 
 ## Contributing:

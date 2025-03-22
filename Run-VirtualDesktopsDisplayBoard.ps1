@@ -33,30 +33,34 @@ try {
     $DllPath = $Config.general.dll_path
     $AhkPath = $Config.general.ahk_path
     
-    # Create a script-specific config file for AHK to read
+    # Create a script-specific config file for AHK v2
     $ahkConfigContent = @"
-; AHK Configuration generated from TOML
-totalDisplays := $TotalDisplays
-startingDisplay := $StartingDisplay
-displayTime := $($Config.general.display_time)
-dllPath := "$DllPath"
+; AHK v2 Configuration generated from TOML
+global totalDisplays := $TotalDisplays
+global startingDisplay := $StartingDisplay
+global displayTime := $($Config.general.display_time)
+global dllPath := "$DllPath"
+global desktopIndex := startingDisplay
 "@
     
     Set-Content -Path "$WorkingDirectory\WinVDDB_config.ahk" -Value $ahkConfigContent
     
-    # Create desktop actions array for AHK
-    $desktopActionsContent = "desktopActions := []`n"
+    # Create desktop actions array for AHK v2
+    $desktopActionsContent = "global desktopActions := [`n"
     
     # Add Desktop 1 (not used)
-    $desktopActionsContent += "desktopActions.Push({count: 0, action: """"})`n"
+    $desktopActionsContent += "    Map('count', 0, 'action', ''),`n"
     
     # Process desktop configs
     foreach ($desktop in $Config.desktop) {
         # Add to desktop actions
         $actionCount = $desktop.action_count
         $action = $desktop.action
-        $desktopActionsContent += "desktopActions.Push({count: $actionCount, action: ""$action""})`n"
+        $desktopActionsContent += "    Map('count', $actionCount, 'action', '$action'),`n"
     }
+    
+    # Close the array
+    $desktopActionsContent += "]`n"
     
     # Save desktop actions to a file
     Set-Content -Path "$WorkingDirectory\WinVDDB_actions.ahk" -Value $desktopActionsContent
@@ -201,5 +205,5 @@ function Set-TaskbarAutoHide {
 
 Set-TaskbarAutoHide -Action Enable
 
-Write-Host "Handoff to Auto HotKey Switch script"
+Write-Host "Handoff to Auto HotKey v2 Switch script"
 Start-Process -FilePath $AhkPath -ArgumentList """$WorkingDirectory\DesktopSwitchingFunctions.ahk"""

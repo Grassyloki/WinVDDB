@@ -10,8 +10,8 @@ starting_display = 2
 display_time = 120000
 # Path to the Virtual Desktop Accessor DLL
 dll_path = "C:\\Scripts\\VirtualDesktopAccessor.dll"
-# Path to AutoHotkey executable
-ahk_path = "C:\\Program Files\\AutoHotkey\\v1.1.37.02\\AutoHotkeyU64.exe"
+# Path to AutoHotkey v2 executable
+ahk_path = "C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe"
 # Working directory for scripts
 working_directory = "C:\\Scripts"
 
