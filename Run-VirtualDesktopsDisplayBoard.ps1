@@ -5,6 +5,13 @@ param (
     [string]$ConfigPath = "config.toml"
 )
 
+# Debug variables
+$DebugEnabled = $false
+$TranscriptLogging = $false
+$LogPath = ""
+$KeepWindowsOpen = $false
+$VerboseOutput = $false
+
 Write-Host "Starting Windows Virtual Desktop Display Board"
 
 # Import required modules
@@ -32,6 +39,50 @@ try {
     $StartingDisplay = $Config.general.starting_display
     $DllPath = $Config.general.dll_path
     $AhkPath = $Config.general.ahk_path
+    
+    # Extract debug settings if they exist
+    if ($Config.ContainsKey("debug")) {
+        if ($Config.debug.ContainsKey("enabled")) {
+            $DebugEnabled = $Config.debug.enabled
+        }
+        
+        if ($DebugEnabled -and $Config.debug.ContainsKey("transcript_logging")) {
+            $TranscriptLogging = $Config.debug.transcript_logging
+        }
+        
+        if ($DebugEnabled -and $Config.debug.ContainsKey("log_path")) {
+            $LogPath = $Config.debug.log_path
+        }
+        
+        if ($DebugEnabled -and $Config.debug.ContainsKey("keep_windows_open")) {
+            $KeepWindowsOpen = $Config.debug.keep_windows_open
+        }
+        
+        if ($DebugEnabled -and $Config.debug.ContainsKey("verbose")) {
+            $VerboseOutput = $Config.debug.verbose
+        }
+    }
+    
+    # Start transcript logging if enabled
+    if ($TranscriptLogging) {
+        $TranscriptPath = if ($LogPath -ne "") { $LogPath } else { "$WorkingDirectory\WinVDDB_$(Get-Date -Format 'yyyyMMdd_HHmmss').log" }
+        Start-Transcript -Path $TranscriptPath -Append
+        Write-Host "Transcript logging started. Log file: $TranscriptPath"
+    }
+    
+    # Log debug status
+    if ($DebugEnabled) {
+        Write-Host "Debug mode enabled"
+        if ($VerboseOutput) {
+            Write-Host "Verbose output enabled"
+            Write-Host "Configuration loaded successfully"
+            Write-Host "Total Displays: $TotalDisplays"
+            Write-Host "Starting Display: $StartingDisplay"
+            Write-Host "Working Directory: $WorkingDirectory"
+            Write-Host "DLL Path: $DllPath"
+            Write-Host "AHK Path: $AhkPath"
+        }
+    }
     
     # Create a script-specific config file for AHK v2
     $ahkConfigContent = @"
@@ -80,6 +131,15 @@ global desktopIndex := startingDisplay
     
 } catch {
     Write-Host "Error loading configuration: $_"
+    if ($TranscriptLogging) {
+        Stop-Transcript
+    }
+    
+    if ($KeepWindowsOpen) {
+        Write-Host "Press any key to continue..."
+        [void][System.Console]::ReadKey($true)
+    }
+    
     exit 1
 }
 
@@ -91,11 +151,59 @@ if ($Config.reboot.enabled -eq $true) {
         WingetTimeout = $Config.reboot.winget_timeout_minutes
     }
     
+    # Add debug parameters if debug is enabled
+    if ($DebugEnabled) {
+        $rebootParams.Add("DebugEnabled", $true)
+        $rebootParams.Add("TranscriptLogging", $TranscriptLogging)
+        
+        if ($LogPath -ne "") {
+            $rebootParams.Add("LogPath", $LogPath)
+        }
+        
+        if ($KeepWindowsOpen) {
+            $rebootParams.Add("KeepWindowOpen", $true)
+        }
+        
+        if ($VerboseOutput) {
+            $rebootParams.Add("Verbose", $true)
+        }
+    }
+    
     $rebootScript = "$WorkingDirectory\DailySystemReboot.ps1"
     $rebootArgsList = "-RebootHour $($rebootParams.RebootHour) -RunWingetUpgrade $($rebootParams.RunWingetUpgrade) -WingetTimeout $($rebootParams.WingetTimeout)"
     
+    # Add debug arguments
+    if ($DebugEnabled) {
+        $rebootArgsList += " -DebugEnabled $true"
+        $rebootArgsList += " -TranscriptLogging $($rebootParams.TranscriptLogging)"
+        
+        if ($rebootParams.ContainsKey("LogPath")) {
+            $rebootArgsList += " -LogPath `"$($rebootParams.LogPath)`""
+        }
+        
+        if ($rebootParams.ContainsKey("KeepWindowOpen")) {
+            $rebootArgsList += " -KeepWindowOpen $true"
+        }
+        
+        if ($rebootParams.ContainsKey("Verbose")) {
+            $rebootArgsList += " -Verbose $true"
+        }
+    }
+    
     Write-Host "Starting daily reboot task with parameters: $rebootArgsList"
-    Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File ""$rebootScript"" $rebootArgsList"
+    
+    # Set up process parameters
+    $processParams = @{
+        FilePath = "powershell.exe"
+        ArgumentList = "-ExecutionPolicy Bypass -File ""$rebootScript"" $rebootArgsList"
+    }
+    
+    # If debug mode with keep windows open is enabled, use -NoExit
+    if ($DebugEnabled -and $KeepWindowsOpen) {
+        $processParams.ArgumentList = "-NoExit " + $processParams.ArgumentList
+    }
+    
+    Start-Process @processParams
     
     # Wait for the reboot script to initialize
     Start-Sleep 5
@@ -134,7 +242,17 @@ function OpenOnDesktop {
     $keysJson = ConvertTo-Json -Compress $postLaunchKeys
     $cmdArgs = "$desktop ""$program"" ""$arguments"" ""$keysJson"""
 
-    Start-Process -FilePath $AhkPath -ArgumentList """$ahkScript"" $cmdArgs"
+    if ($VerboseOutput) {
+        Write-Host "Launching program on desktop $desktop with command: $AhkPath ""$ahkScript"" $cmdArgs"
+    }
+
+    # Set up process parameters
+    $processParams = @{
+        FilePath = $AhkPath
+        ArgumentList = """$ahkScript"" $cmdArgs"
+    }
+    
+    Start-Process @processParams
     Write-Host "Launching $program with arguments '$arguments' on desktop $desktop"
     
     # Base sleep time for program initialization
@@ -246,4 +364,20 @@ function Set-TaskbarAutoHide {
 Set-TaskbarAutoHide -Action Enable
 
 Write-Host "Handoff to Auto HotKey v2 Switch script"
-Start-Process -FilePath $AhkPath -ArgumentList """$WorkingDirectory\DesktopSwitchingFunctions.ahk"""
+# Set up process parameters
+$processParams = @{
+    FilePath = $AhkPath
+    ArgumentList = """$WorkingDirectory\DesktopSwitchingFunctions.ahk"""
+}
+
+Start-Process @processParams
+
+if ($TranscriptLogging) {
+    Stop-Transcript
+}
+
+if ($KeepWindowsOpen) {
+    Write-Host ""
+    Write-Host "Debug mode: Window will remain open. Press any key to exit..."
+    [void][System.Console]::ReadKey($true)
+}

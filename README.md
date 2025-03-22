@@ -17,6 +17,7 @@ launching applications, and cycling through them at regular intervals.
 -   Taskbar auto-hide during rotation
 -   Daily system reboot with automatic updates via winget
 -   Easy configuration via TOML configuration file
+-   Debug mode with logging and window persistence
 
 ## Installation:
 
@@ -58,6 +59,16 @@ ahk_path = "C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe"
 working_directory = "C:\\Scripts"
 ```
 
+### Debug Settings
+```toml
+[debug]
+enabled = false  # Master switch for debug mode
+transcript_logging = false  # Enable PowerShell transcript logging
+log_path = ""  # Custom log file path (leave empty for default)
+keep_windows_open = false  # Keep PowerShell windows open after execution
+verbose = false  # Show verbose output
+```
+
 ### Reboot Settings
 ```toml
 [reboot]
@@ -88,6 +99,28 @@ action = "{F5}"  # Refresh the page with F5
   - Format: `[{keys = "key combination", delay = delay_in_ms}, ...]`
 - `action_count`: How many rotations before triggering the periodic action
 - `action`: The AutoHotkey key sequence to send periodically
+
+## Debugging:
+
+The debug settings in config.toml allow you to troubleshoot issues:
+
+- **enabled**: Master switch for debug mode
+- **transcript_logging**: Records all PowerShell commands and output to a log file
+- **log_path**: Specify a custom log file location
+- **keep_windows_open**: Prevents PowerShell windows from closing, allowing you to see output
+- **verbose**: Shows additional information during execution
+
+To enable debugging:
+
+1. Edit config.toml and set debug.enabled = true
+2. Enable other debug options as needed (transcript_logging, keep_windows_open, etc.)
+3. Run Launch-DisplayBoard.ps1
+4. PowerShell windows will stay open if keep_windows_open is enabled
+5. Check log files if transcript_logging is enabled
+
+Example log file names:
+- WinVDDB_YYYYMMDD_HHMMSS.log (main script)
+- WinVDDB_Reboot_YYYYMMDD_HHMMSS.log (reboot script)
 
 ## Auto-Start Setup:
 
@@ -188,6 +221,8 @@ action = "^s"
 -   Verify AutoHotkey v2 is installed correctly
 -   Ensure VirtualDesktopAccessor.dll is present and accessible
 -   Make sure the Powershell-TOML module is installed
+-   Enable debug mode in config.toml to keep windows open and enable logging
+-   Check transcript logs for detailed error information
 
 ## Limitations:
 

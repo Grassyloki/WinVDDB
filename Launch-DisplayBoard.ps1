@@ -49,9 +49,51 @@ if (-not (Test-Path -Path $ConfigPath)) {
     }
 }
 
+# Check for debug settings in config.toml
+$DebugEnabled = $false
+$KeepWindowsOpen = $false
+
+try {
+    # Check for the Powershell-TOML module and install if not present
+    if (-not (Get-Module -Name Powershell-TOML -ListAvailable)) {
+        Write-Host "Powershell-TOML module not found. Installing..."
+        Install-Module -Name Powershell-TOML -Force -Scope CurrentUser
+    }
+    Import-Module Powershell-TOML
+    
+    # Load configuration to check for debug settings
+    $Config = ConvertFrom-Toml -Path $ConfigPath
+    
+    # Extract debug settings if they exist
+    if ($Config.ContainsKey("debug")) {
+        if ($Config.debug.ContainsKey("enabled")) {
+            $DebugEnabled = $Config.debug.enabled
+        }
+        
+        if ($DebugEnabled -and $Config.debug.ContainsKey("keep_windows_open")) {
+            $KeepWindowsOpen = $Config.debug.keep_windows_open
+        }
+    }
+} catch {
+    Write-Host "Warning: Unable to read debug settings from config file. Continuing with default settings."
+}
+
 # Launch the main script
 Write-Host "Launching Windows Virtual Desktop Display Board..."
 $MainScript = Join-Path -Path $WorkingDirectory -ChildPath "Run-VirtualDesktopsDisplayBoard.ps1"
-Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Bypass -File `"$MainScript`" -ConfigPath `"$ConfigPath`""
+
+# Set up process parameters
+$processParams = @{
+    FilePath = "powershell.exe"
+    ArgumentList = "-ExecutionPolicy Bypass -File `"$MainScript`" -ConfigPath `"$ConfigPath`""
+}
+
+# If debug mode with keep windows open is enabled, use -NoExit
+if ($DebugEnabled -and $KeepWindowsOpen) {
+    $processParams.ArgumentList = "-NoExit " + $processParams.ArgumentList
+    Write-Host "Debug mode with keep windows open is enabled."
+}
+
+Start-Process @processParams
 
 Write-Host "Launcher completed."
