@@ -1,16 +1,38 @@
 #SingleInstance Force
 ProcessSetPriority "High"
 
+; Initialize error log file
+logFilePath := A_ScriptDir "\Logs\AHK_Program_Setup_Error.log"
+SplitPath logFilePath, , logDir
+if !DirExist(logDir)
+    DirCreate(logDir)
+
+FileAppend("Program Setup Script started: " A_Now "`n", logFilePath)
+
 global DllPath := "C:\Scripts\VirtualDesktopAccessor.dll"
+
+; Log DLL path
+FileAppend("DLL Path: " DllPath "`n", logFilePath)
 
 ; Load the Virtual Desktop Accessor DLL
 if !DllCall("LoadLibrary", "Str", DllPath) {
-    MsgBox "Failed to load VirtualDesktopAccessor.dll at: " DllPath
+    errorMsg := "Failed to load VirtualDesktopAccessor.dll at: " DllPath
+    FileAppend(errorMsg "`n", logFilePath)
+    MsgBox errorMsg
     ExitApp
 }
 
-; Load JSON library for handling post-launch key sequences
-#Include JSON.ahk
+FileAppend("DLL loaded successfully`n", logFilePath)
+
+try {
+    ; Load JSON library for handling post-launch key sequences
+    #Include JSON.ahk
+    FileAppend("JSON library loaded successfully`n", logFilePath)
+} catch Error as e {
+    FileAppend("Error loading JSON library: " e.Message " " e.Extra "`n", logFilePath)
+    MsgBox "Error loading JSON library: " e.Message
+    ExitApp
+}
 
 ; Main function to switch desktop, run program, and execute post-launch actions
 Main(desktopIndex, program, args, postLaunchKeysJson) {

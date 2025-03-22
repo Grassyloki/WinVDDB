@@ -155,7 +155,19 @@ try {
     
     # Start transcript logging if enabled
     if ($DebugEnabled -and $TranscriptLogging) {
-        $TranscriptPath = if ($LogPath -ne "") { $LogPath } else { "$WorkingDirectory\WinVDDB_$(Get-Date -Format 'yyyyMMdd_HHmmss').log" }
+        $TranscriptPath = if ($LogPath -ne "") { $LogPath } else { "$WorkingDirectory\Logs\WinVDDB_$(Get-Date -Format 'yyyyMMdd_HHmmss').log" }
+        
+        # Ensure Logs directory exists
+        $LogDir = Split-Path -Parent $TranscriptPath
+        if (-not (Test-Path -Path $LogDir)) {
+            try {
+                New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
+                Write-Host "Created logs directory: $LogDir"
+            } catch {
+                Write-Host "Error creating logs directory: $_"
+            }
+        }
+        
         try {
             Start-Transcript -Path $TranscriptPath -Append
             Write-Host "Transcript logging started. Log file: $TranscriptPath"
@@ -331,7 +343,7 @@ function Ensure-VirtualDesktops {
     Write-Host "Creating $requiredCount virtual desktops using AutoHotkey"
     
     # Create a temporary AHK script to create desktops
-    $tempAhkPath = "$WorkingDirectory\temp_create_desktops.ahk"
+    $tempAhkPath = "$WorkingDirectory\Logs\temp_create_desktops.ahk"
     $createDesktopsScript = @"
 #SingleInstance Force
 
@@ -357,6 +369,7 @@ Loop (requiredCount - currentCount) {
 ; Get final count and report
 finalCount := DllCall("VirtualDesktopAccessor\GetDesktopCount")
 FileAppend("Desktop count: " . finalCount . "`n", "*")
+MsgBox("Created " . requiredCount . " virtual desktops. Current count: " . finalCount)
 ExitApp
 "@
     
@@ -388,6 +401,12 @@ function OpenOnDesktop {
 
     $ahkScript = "$WorkingDirectory\Setup-ProgramsOnVirtualDesktops.ahk"
     
+    # Verify AHK script exists
+    if (-not (Test-Path -Path $ahkScript)) {
+        Write-Host "ERROR: AHK program setup script not found at: $ahkScript"
+        return
+    }
+    
     # Convert post-launch keys to JSON string for passing to AHK
     $keysJson = if ($postLaunchKeys.Count -gt 0) {
         ConvertTo-Json -Compress $postLaunchKeys
@@ -406,8 +425,16 @@ function OpenOnDesktop {
         ArgumentList = """$ahkScript"" $cmdArgs"
     }
     
-    Start-Process @processParams
-    Write-Host "Launching $program with arguments '$arguments' on desktop $desktop"
+    # Start the process and get the process object
+    $programProcess = Start-Process @processParams -PassThru
+    Write-Host "Launching $program with arguments '$arguments' on desktop $desktop (PID: $($programProcess.Id))"
+    
+    # Wait a moment to see if the process exits immediately
+    Start-Sleep 2
+    if ($programProcess.HasExited) {
+        Write-Host "WARNING: The program setup script exited immediately, which may indicate an error."
+        Write-Host "Check the log file at: $WorkingDirectory\Logs\AHK_Program_Setup_Error.log"
+    }
     
     # Base sleep time for program initialization
     Start-Sleep 10
@@ -541,13 +568,53 @@ function Set-TaskbarAutoHide {
 Set-TaskbarAutoHide -Action Enable
 
 Write-Host "Handoff to Auto HotKey v2 Switch script"
+# Make sure generated config files exist
+if (!(Test-Path -Path "$WorkingDirectory\WinVDDB_config.ahk") -or !(Test-Path -Path "$WorkingDirectory\WinVDDB_actions.ahk")) {
+    Write-Host "ERROR: Generated AHK configuration files not found. Desktop switching will not work."
+    if ($KeepWindowsOpen) {
+        Write-Host "Press any key to continue..."
+        [void][System.Console]::ReadKey($true)
+    }
+    exit 1
+}
+
+# Ensure Logs directory exists for AHK logs
+$AhkLogDir = "$WorkingDirectory\Logs"
+if (-not (Test-Path -Path $AhkLogDir)) {
+    try {
+        New-Item -Path $AhkLogDir -ItemType Directory -Force | Out-Null
+        Write-Host "Created logs directory for AHK: $AhkLogDir"
+    } catch {
+        Write-Host "Error creating logs directory for AHK: $_"
+    }
+}
+
 # Set up process parameters
 $processParams = @{
     FilePath = $AhkPath
     ArgumentList = """$WorkingDirectory\DesktopSwitchingFunctions.ahk"""
 }
 
-Start-Process @processParams
+if ($VerboseOutput) {
+    Write-Host "Starting AutoHotkey with command: $AhkPath ""$WorkingDirectory\DesktopSwitchingFunctions.ahk"""
+}
+
+# Start the process and capture the process object
+$ahkProcess = Start-Process @processParams -PassThru
+
+# Wait a moment to see if the process exits immediately (which would indicate a startup error)
+Start-Sleep -Seconds 2
+if ($ahkProcess.HasExited) {
+    Write-Host "ERROR: The AutoHotkey process exited immediately, which indicates a startup error."
+    Write-Host "Check the log file at: $WorkingDirectory\Logs\AHK_Error.log"
+    if ($KeepWindowsOpen) {
+        Write-Host "Press any key to continue..."
+        [void][System.Console]::ReadKey($true)
+    }
+    exit 1
+} else {
+    Write-Host "AutoHotkey process started successfully with ID: $($ahkProcess.Id)"
+}
 
 if ($TranscriptLogging) {
     try {

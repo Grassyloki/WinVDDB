@@ -15,7 +15,19 @@ param (
 # Start transcript logging if enabled
 if ($DebugEnabled -and $TranscriptLogging) {
     $WorkingDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
-    $TranscriptPath = if ($LogPath -ne "") { $LogPath } else { "$WorkingDirectory\WinVDDB_Reboot_$(Get-Date -Format 'yyyyMMdd_HHmmss').log" }
+    $TranscriptPath = if ($LogPath -ne "") { $LogPath } else { "$WorkingDirectory\Logs\WinVDDB_Reboot_$(Get-Date -Format 'yyyyMMdd_HHmmss').log" }
+    
+    # Ensure Logs directory exists
+    $LogDir = Split-Path -Parent $TranscriptPath
+    if (-not (Test-Path -Path $LogDir)) {
+        try {
+            New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
+            Write-Host "Created logs directory: $LogDir"
+        } catch {
+            Write-Host "Error creating logs directory: $_"
+        }
+    }
+    
     try {
         Start-Transcript -Path $TranscriptPath -Append
         Write-Host "Transcript logging started. Log file: $TranscriptPath"

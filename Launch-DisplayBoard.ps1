@@ -12,6 +12,17 @@ $WorkingDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $WorkingDirectory
 Write-Host "Working directory set to: $WorkingDirectory"
 
+# Create logs directory
+$LogsDirectory = Join-Path -Path $WorkingDirectory -ChildPath "Logs"
+if (-not (Test-Path -Path $LogsDirectory)) {
+    try {
+        New-Item -Path $LogsDirectory -ItemType Directory -Force | Out-Null
+        Write-Host "Created logs directory: $LogsDirectory"
+    } catch {
+        Write-Host "Error creating logs directory: $_"
+    }
+}
+
 # Check for required dependencies
 $AhkPath = "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
 if (-not (Test-Path -Path $AhkPath)) {
@@ -161,7 +172,19 @@ try {
 if ($DebugEnabled) {
     Write-Host "Debug mode is enabled."
     if ($TranscriptLogging) {
-        $TranscriptPath = if ($LogPath -ne "") { $LogPath } else { "$WorkingDirectory\WinVDDB_Launch_$(Get-Date -Format 'yyyyMMdd_HHmmss').log" }
+        $TranscriptPath = if ($LogPath -ne "") { $LogPath } else { "$WorkingDirectory\Logs\WinVDDB_Launch_$(Get-Date -Format 'yyyyMMdd_HHmmss').log" }
+        
+        # Ensure Logs directory exists
+        $LogDir = Split-Path -Parent $TranscriptPath
+        if (-not (Test-Path -Path $LogDir)) {
+            try {
+                New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
+                Write-Host "Created logs directory: $LogDir"
+            } catch {
+                Write-Host "Error creating logs directory: $_"
+            }
+        }
+        
         try {
             Start-Transcript -Path $TranscriptPath -Append
             Write-Host "Transcript logging started. Log file: $TranscriptPath"
