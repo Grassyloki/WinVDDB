@@ -1,6 +1,6 @@
-# WinVDK - Windows Virtual Desktop Kiosk
+# WinVDDB - Windows Virtual Desktop Display Board
 
-WinVDK is a system for creating a multi-display kiosk experience using
+WinVDDB is a system for creating a multi-display board experience using
 Windows virtual desktops. It automates setting up virtual desktops,
 launching applications, and cycling through them at regular intervals.
 
@@ -12,41 +12,78 @@ launching applications, and cycling through them at regular intervals.
 -   Ability to pause and resume desktop rotation
 -   Custom actions for each desktop (e.g., refreshing a webpage
     periodically)
+-   Post-launch key sequences for applications
+-   Manual desktop selection with auto-timeout
 -   Taskbar auto-hide during rotation
--   Daily system reboot for maintenance
--   Easy configuration and customization
+-   Daily system reboot with automatic updates via winget
+-   Easy configuration via TOML configuration file
 
 ## Installation:
 
 1.  Create C:\Scripts folder
-2.  Copy these files into C:\Scripts:
+2.  Copy all files into C:\Scripts:
+    -   Launch-DisplayBoard.ps1 (main launcher script)
     -   Run-VirtualDesktopsDisplayBoard.ps1
     -   DesktopSwitchingFunctions.ahk
     -   Setup-ProgramsOnVirtualDesktops.ahk
     -   DailySystemReboot.ps1
     -   VirtualDesktopAccessor.dll
+    -   JSON.ahk
+    -   config.toml (copied and configured from config.toml.example)
 3.  Install AutoHotkey v1.1 or later from
     [autohotkey.com](https://www.autohotkey.com)
+4.  Install required PowerShell modules: VirtualDesktop and Powershell-TOML
 
 ## Usage:
 
-Run Run-VirtualDesktopsDisplayBoard.ps1 in PowerShell to start manually.
+Run Launch-DisplayBoard.ps1 in PowerShell to start manually.
 
 -   F2: Pause/resume desktop rotation
+-   2-9: Manually switch to a specific desktop for 1 hour, then resume
+    automatic rotation
 -   Taskbar auto-hides during rotation, shows when paused
 
-## Adding/Removing Programs:
+## Configuration:
 
-Edit Run-VirtualDesktopsDisplayBoard.ps1:
+The main configuration is in the config.toml file. This file controls:
 
-    OpenOnDesktop -desktop 2 -program "firefox.exe" -arguments "-new-window --kiosk https://example.com"
+-   Total number of desktops
+-   Display time per desktop
+-   Programs to launch on each desktop
+-   Post-launch key sequences for each program
+-   Custom actions per desktop (like refreshing)
+-   Daily reboot settings including winget upgrades
 
-## Adjusting Total Desktops:
+Example configuration (config.toml.example):
 
-1.  Edit DesktopSwitchingFunctions.ahk
-2.  Change totalDisplays variable
-3.  Update desktopActions array
-4.  Modify OpenOnDesktop calls in Run-VirtualDesktopsDisplayBoard.ps1
+```toml
+# General Settings
+[general]
+total_displays = 5
+starting_display = 2
+display_time = 120000  # milliseconds
+dll_path = "C:\\Scripts\\VirtualDesktopAccessor.dll"
+ahk_path = "C:\\Program Files\\AutoHotkey\\v1.1.37.02\\AutoHotkeyU64.exe"
+working_directory = "C:\\Scripts"
+
+# Daily Reboot Settings
+[reboot]
+enabled = true
+reboot_hour = 8
+run_winget_upgrade = true
+winget_timeout_minutes = 60
+
+# Example Desktop Configuration
+[[desktop]]
+number = 2
+program = "firefox.exe"
+arguments = "-new-window --kiosk https://example.com"
+post_launch_keys = [
+  {keys = "{F11}", delay = 3000}
+]
+action_count = 8
+action = "{F5}"
+```
 
 ## Auto-Start Setup:
 
@@ -56,7 +93,7 @@ Edit Run-VirtualDesktopsDisplayBoard.ps1:
 4.  Action:
     -   Program: powershell.exe
     -   Arguments: -ExecutionPolicy Bypass -File
-        "C:\Scripts\Run-VirtualDesktopsDisplayBoard.ps1"
+        "C:\Scripts\Launch-DisplayBoard.ps1"
 
 ## Auto Login Setup:
 
@@ -67,53 +104,31 @@ Edit Run-VirtualDesktopsDisplayBoard.ps1:
 
 **Note:** Use auto-login cautiously on unsecured systems.
 
-## Configuration:
-
-Main configuration is in Run-VirtualDesktopsDisplayBoard.ps1. This
-script sets up virtual desktops and launches programs.
-
 ## File Descriptions:
 
-1.  Run-VirtualDesktopsDisplayBoard.ps1: Main script that initializes
+1.  Launch-DisplayBoard.ps1: Launcher script that switches to desktop 1
+    and starts the main script.
+2.  Run-VirtualDesktopsDisplayBoard.ps1: Main script that initializes
     the system, creates virtual desktops, and launches programs.
-2.  DesktopSwitchingFunctions.ahk: Handles desktop rotation,
+3.  DesktopSwitchingFunctions.ahk: Handles desktop rotation,
     pause/resume functionality, and custom actions per desktop.
-3.  Setup-ProgramsOnVirtualDesktops.ahk: Helper script to launch
-    programs on specific virtual desktops.
-4.  DailySystemReboot.ps1: Manages daily system reboot for maintenance.
-5.  VirtualDesktopAccessor.dll: Required DLL for interacting with
+4.  Setup-ProgramsOnVirtualDesktops.ahk: Helper script to launch
+    programs on specific virtual desktops and execute post-launch key
+    sequences.
+5.  DailySystemReboot.ps1: Manages daily system updates via winget and
+    reboots for maintenance.
+6.  VirtualDesktopAccessor.dll: Required DLL for interacting with
     Windows virtual desktops.
+7.  JSON.ahk: JSON parsing library for AHK.
+8.  config.toml: Configuration file for all settings.
 
-## Customization:
+## New Features in This Version:
 
-### Changing Rotation Interval:
-
-In DesktopSwitchingFunctions.ahk, modify:
-
-    global displayTime := 120000  ; Time in milliseconds (120000 = 2 minutes)
-
-### Custom Actions Per Desktop:
-
-In DesktopSwitchingFunctions.ahk, the desktopActions array defines
-actions for each desktop:
-
-    global desktopActions := []
-    desktopActions.Push({count: 0, action: ""})  ; Desktop 1: No action
-    desktopActions.Push({count: 0, action: ""})  ; Desktop 2: No action
-    desktopActions.Push({count: 0, action: ""})  ; Desktop 3: No action
-    desktopActions.Push({count: 8, action: "Send, {F5}"})  ; Desktop 4: Press F5 every 8 switches
-    desktopActions.Push({count: 0, action: ""})  ; Desktop 5: No action
-    desktopActions.Push({count: 0, action: ""})  ; Desktop 6: No action
-
-This array initializes actions for each desktop. Each entry represents a
-desktop and specifies:
-
--   `count`: How many rotations before the action is triggered (0 means
-    no action)
--   `action`: The AutoHotkey command to execute when triggered
-
-In the example, Desktop 4 is set to press F5 (refresh) every 8
-rotations. You can customize these actions for each desktop as needed.
+- TOML configuration file for all settings
+- Number key (2-9) shortcuts to manually select a desktop
+- Post-launch key sequences for applications
+- Winget upgrades before system reboot
+- Launcher script that activates on desktop 1
 
 ## Troubleshooting:
 
@@ -121,6 +136,7 @@ rotations. You can customize these actions for each desktop as needed.
 -   Check Windows PowerShell execution policy
 -   Verify AutoHotkey is installed correctly
 -   Ensure VirtualDesktopAccessor.dll is present and accessible
+-   Make sure the Powershell-TOML module is installed
 
 ## Limitations:
 
