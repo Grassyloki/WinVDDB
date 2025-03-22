@@ -2,6 +2,11 @@
 # Launcher script for the Windows Virtual Desktop Display Board
 # This script activates on Virtual Desktop 1 and launches the main script
 
+param (
+    [string]$ConfigPath = "config.toml",
+    [switch]$Debug = $false
+)
+
 # Set the working directory
 $WorkingDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $WorkingDirectory
@@ -61,7 +66,8 @@ try {
 function Get-SimpleTomlValue {
     param (
         [string]$FilePath,
-        [string]$Key
+        [string]$Key,
+        [object]$DefaultValue = $null
     )
     
     try {
@@ -77,15 +83,14 @@ function Get-SimpleTomlValue {
             elseif ($value -match '^"(.*)"$') { return $matches[1] }
             else { return $value }
         }
-        return $null
+        return $DefaultValue
     } catch {
         Write-Host "Error reading TOML value: $_"
-        return $null
+        return $DefaultValue
     }
 }
 
 # Check for config file
-$ConfigPath = Join-Path -Path $WorkingDirectory -ChildPath "config.toml"
 if (-not (Test-Path -Path $ConfigPath)) {
     $ConfigExamplePath = Join-Path -Path $WorkingDirectory -ChildPath "config.toml.example"
     if (Test-Path -Path $ConfigExamplePath) {
@@ -102,8 +107,11 @@ if (-not (Test-Path -Path $ConfigPath)) {
 }
 
 # Check for debug settings in config.toml
-$DebugEnabled = $false
+$DebugEnabled = $Debug.IsPresent
 $KeepWindowsOpen = $false
+$TranscriptLogging = $false
+$LogPath = ""
+$VerboseOutput = $false
 
 try {
     # Try using PowerShell-TOML if installed
@@ -113,23 +121,62 @@ try {
         
         # Extract debug settings if they exist
         if ($Config.ContainsKey("debug")) {
-            if ($Config.debug.ContainsKey("enabled")) {
+            if ($Config.debug.ContainsKey("enabled") -and !$Debug.IsPresent) {
                 $DebugEnabled = $Config.debug.enabled
             }
             
             if ($DebugEnabled -and $Config.debug.ContainsKey("keep_windows_open")) {
                 $KeepWindowsOpen = $Config.debug.keep_windows_open
             }
+            
+            if ($DebugEnabled -and $Config.debug.ContainsKey("transcript_logging")) {
+                $TranscriptLogging = $Config.debug.transcript_logging
+            }
+            
+            if ($DebugEnabled -and $Config.debug.ContainsKey("log_path")) {
+                $LogPath = $Config.debug.log_path
+            }
+            
+            if ($DebugEnabled -and $Config.debug.ContainsKey("verbose")) {
+                $VerboseOutput = $Config.debug.verbose
+            }
         }
     } else {
         # Fall back to basic parsing
-        $DebugEnabled = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.enabled"
+        if (!$Debug.IsPresent) {
+            $DebugEnabled = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.enabled" -DefaultValue $false
+        }
+        
         if ($DebugEnabled) {
-            $KeepWindowsOpen = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.keep_windows_open"
+            $KeepWindowsOpen = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.keep_windows_open" -DefaultValue $false
+            $TranscriptLogging = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.transcript_logging" -DefaultValue $false
+            $LogPath = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.log_path" -DefaultValue ""
+            $VerboseOutput = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.verbose" -DefaultValue $false
         }
     }
 } catch {
     Write-Host "Warning: Unable to read debug settings from config file. Continuing with default settings."
+}
+
+if ($DebugEnabled) {
+    Write-Host "Debug mode is enabled."
+    if ($TranscriptLogging) {
+        $TranscriptPath = if ($LogPath -ne "") { $LogPath } else { "$WorkingDirectory\WinVDDB_Launch_$(Get-Date -Format 'yyyyMMdd_HHmmss').log" }
+        try {
+            Start-Transcript -Path $TranscriptPath -Append
+            Write-Host "Transcript logging started. Log file: $TranscriptPath"
+        } catch {
+            Write-Host "Error starting transcript: $_"
+        }
+    }
+    
+    if ($VerboseOutput) {
+        Write-Host "Verbose output enabled."
+        Write-Host "Debug settings: KeepWindowsOpen=$KeepWindowsOpen, TranscriptLogging=$TranscriptLogging"
+        if ($LogPath -ne "") {
+            Write-Host "Log path: $LogPath"
+        }
+    }
 }
 
 # Launch the main script
@@ -142,6 +189,27 @@ $processParams = @{
     ArgumentList = "-ExecutionPolicy Bypass -File `"$MainScript`" -ConfigPath `"$ConfigPath`""
 }
 
+# Add debug parameters if debug is enabled
+if ($DebugEnabled) {
+    $processParams.ArgumentList += " -DebugEnabled"
+    
+    if ($TranscriptLogging) {
+        $processParams.ArgumentList += " -TranscriptLogging"
+    }
+    
+    if ($LogPath -ne "") {
+        $processParams.ArgumentList += " -LogPath `"$LogPath`""
+    }
+    
+    if ($KeepWindowsOpen) {
+        $processParams.ArgumentList += " -KeepWindowsOpen"
+    }
+    
+    if ($VerboseOutput) {
+        $processParams.ArgumentList += " -VerboseOutput"
+    }
+}
+
 # If debug mode with keep windows open is enabled, use -NoExit
 if ($DebugEnabled -and $KeepWindowsOpen) {
     $processParams.ArgumentList = "-NoExit " + $processParams.ArgumentList
@@ -151,3 +219,17 @@ if ($DebugEnabled -and $KeepWindowsOpen) {
 Start-Process @processParams
 
 Write-Host "Launcher completed."
+
+if ($TranscriptLogging) {
+    try {
+        Stop-Transcript
+    } catch {
+        # Transcript might not be started
+    }
+}
+
+if ($KeepWindowsOpen) {
+    Write-Host ""
+    Write-Host "Debug mode: Window will remain open. Press any key to exit..."
+    [void][System.Console]::ReadKey($true)
+}

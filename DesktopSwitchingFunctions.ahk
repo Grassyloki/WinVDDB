@@ -13,7 +13,7 @@ global desktopSwitchCount := []
 
 ; Load the Virtual Desktop Accessor DLL
 if !DllCall("LoadLibrary", "Str", dllPath) {
-    MsgBox "Failed to load VirtualDesktopAccessor.dll"
+    MsgBox "Failed to load VirtualDesktopAccessor.dll at: " dllPath
     ExitApp
 }
 
@@ -131,6 +131,6 @@ SetTaskbarAutoHide(enable) {
 OnExit Exit
 
 Exit(*) {
-    DllCall("FreeLibrary", "Ptr", dllPath)
+    DllCall("FreeLibrary", "Ptr", DllCall("GetModuleHandle", "Str", dllPath))
     ExitApp
 }

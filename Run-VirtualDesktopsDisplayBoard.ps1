@@ -2,15 +2,13 @@
 # Main script for Windows Virtual Desktop Display Board
 
 param (
-    [string]$ConfigPath = "config.toml"
+    [string]$ConfigPath = "config.toml",
+    [switch]$DebugEnabled = $false,
+    [switch]$TranscriptLogging = $false,
+    [string]$LogPath = "",
+    [switch]$KeepWindowsOpen = $false,
+    [switch]$VerboseOutput = $false
 )
-
-# Debug variables
-$DebugEnabled = $false
-$TranscriptLogging = $false
-$LogPath = ""
-$KeepWindowsOpen = $false
-$VerboseOutput = $false
 
 Write-Host "Starting Windows Virtual Desktop Display Board"
 
@@ -80,28 +78,29 @@ try {
         $WorkingDirectory = $Config.general.working_directory
         $TotalDisplays = $Config.general.total_displays
         $StartingDisplay = $Config.general.starting_display
+        $DisplayTime = $Config.general.display_time
         $DllPath = $Config.general.dll_path
         $AhkPath = $Config.general.ahk_path
         
         # Extract debug settings if they exist
-        if ($Config.ContainsKey("debug")) {
+        if (!$DebugEnabled.IsPresent -and $Config.ContainsKey("debug")) {
             if ($Config.debug.ContainsKey("enabled")) {
                 $DebugEnabled = $Config.debug.enabled
             }
             
-            if ($DebugEnabled -and $Config.debug.ContainsKey("transcript_logging")) {
+            if ($DebugEnabled -and !$TranscriptLogging.IsPresent -and $Config.debug.ContainsKey("transcript_logging")) {
                 $TranscriptLogging = $Config.debug.transcript_logging
             }
             
-            if ($DebugEnabled -and $Config.debug.ContainsKey("log_path")) {
+            if ($DebugEnabled -and $LogPath -eq "" -and $Config.debug.ContainsKey("log_path")) {
                 $LogPath = $Config.debug.log_path
             }
             
-            if ($DebugEnabled -and $Config.debug.ContainsKey("keep_windows_open")) {
+            if ($DebugEnabled -and !$KeepWindowsOpen.IsPresent -and $Config.debug.ContainsKey("keep_windows_open")) {
                 $KeepWindowsOpen = $Config.debug.keep_windows_open
             }
             
-            if ($DebugEnabled -and $Config.debug.ContainsKey("verbose")) {
+            if ($DebugEnabled -and !$VerboseOutput.IsPresent -and $Config.debug.ContainsKey("verbose")) {
                 $VerboseOutput = $Config.debug.verbose
             }
         }
@@ -110,16 +109,31 @@ try {
         $WorkingDirectory = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.working_directory" -DefaultValue "C:\Scripts"
         $TotalDisplays = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.total_displays" -DefaultValue 6
         $StartingDisplay = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.starting_display" -DefaultValue 2
+        $DisplayTime = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.display_time" -DefaultValue 120000
         $DllPath = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.dll_path" -DefaultValue "C:\Scripts\VirtualDesktopAccessor.dll"
         $AhkPath = Get-SimpleTomlValue -FilePath $ConfigPath -Key "general.ahk_path" -DefaultValue "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe"
         
         # Extract debug settings
-        $DebugEnabled = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.enabled" -DefaultValue $false
+        if (!$DebugEnabled.IsPresent) {
+            $DebugEnabled = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.enabled" -DefaultValue $false
+        }
+        
         if ($DebugEnabled) {
-            $TranscriptLogging = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.transcript_logging" -DefaultValue $false
-            $LogPath = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.log_path" -DefaultValue ""
-            $KeepWindowsOpen = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.keep_windows_open" -DefaultValue $false
-            $VerboseOutput = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.verbose" -DefaultValue $false
+            if (!$TranscriptLogging.IsPresent) {
+                $TranscriptLogging = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.transcript_logging" -DefaultValue $false
+            }
+            
+            if ($LogPath -eq "") {
+                $LogPath = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.log_path" -DefaultValue ""
+            }
+            
+            if (!$KeepWindowsOpen.IsPresent) {
+                $KeepWindowsOpen = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.keep_windows_open" -DefaultValue $false
+            }
+            
+            if (!$VerboseOutput.IsPresent) {
+                $VerboseOutput = Get-SimpleTomlValue -FilePath $ConfigPath -Key "debug.verbose" -DefaultValue $false
+            }
         }
     }
     
@@ -140,10 +154,14 @@ try {
     }
     
     # Start transcript logging if enabled
-    if ($TranscriptLogging) {
+    if ($DebugEnabled -and $TranscriptLogging) {
         $TranscriptPath = if ($LogPath -ne "") { $LogPath } else { "$WorkingDirectory\WinVDDB_$(Get-Date -Format 'yyyyMMdd_HHmmss').log" }
-        Start-Transcript -Path $TranscriptPath -Append
-        Write-Host "Transcript logging started. Log file: $TranscriptPath"
+        try {
+            Start-Transcript -Path $TranscriptPath -Append
+            Write-Host "Transcript logging started. Log file: $TranscriptPath"
+        } catch {
+            Write-Host "Error starting transcript: $_"
+        }
     }
     
     # Log debug status
@@ -161,19 +179,20 @@ try {
     }
     
     # Create a script-specific config file for AHK v2
+    # Note: In AHK v2, global is not a prefix but a statement, so we need to declare globals separately
     $ahkConfigContent = @"
 ; AHK v2 Configuration generated from TOML
-global totalDisplays := $TotalDisplays
-global startingDisplay := $StartingDisplay
-global displayTime := $($Config.general.display_time)
+totalDisplays := $TotalDisplays
+startingDisplay := $StartingDisplay
+displayTime := $DisplayTime
 global dllPath := "$DllPath"
-global desktopIndex := startingDisplay
+desktopIndex := startingDisplay
 "@
     
     Set-Content -Path "$WorkingDirectory\WinVDDB_config.ahk" -Value $ahkConfigContent
     
     # Create desktop actions array for AHK v2
-    $desktopActionsContent = "global desktopActions := [`n"
+    $desktopActionsContent = "desktopActions := [`n"
     
     # Process desktop configs
     for ($i = 1; $i -le $TotalDisplays; $i++) {
@@ -210,7 +229,11 @@ global desktopIndex := startingDisplay
 } catch {
     Write-Host "Error loading configuration: $_"
     if ($TranscriptLogging) {
-        Stop-Transcript
+        try {
+            Stop-Transcript
+        } catch {
+            # Transcript might not be started
+        }
     }
     
     if ($KeepWindowsOpen) {
@@ -313,9 +336,9 @@ function Ensure-VirtualDesktops {
 #SingleInstance Force
 
 ; Load the VirtualDesktopAccessor.dll
-dllPath := "$DllPath"
+global dllPath := "$DllPath"
 if !DllCall("LoadLibrary", "Str", dllPath) {
-    MsgBox "Failed to load VirtualDesktopAccessor.dll"
+    MsgBox "Failed to load VirtualDesktopAccessor.dll at: " dllPath
     ExitApp
 }
 
@@ -339,12 +362,16 @@ ExitApp
     
     Set-Content -Path $tempAhkPath -Value $createDesktopsScript
     
-    # Run the AHK script
-    $output = & $AhkPath $tempAhkPath
-    Write-Host $output
-    
-    # Clean up the temporary script
-    Remove-Item -Path $tempAhkPath -ErrorAction SilentlyContinue
+    try {
+        # Run the AHK script
+        $output = & $AhkPath $tempAhkPath
+        Write-Host $output
+    } catch {
+        Write-Host "Error running AHK script: $_"
+    } finally {
+        # Clean up the temporary script
+        Remove-Item -Path $tempAhkPath -ErrorAction SilentlyContinue
+    }
 }
 
 # Set the number of required virtual desktops based on config
@@ -523,7 +550,11 @@ $processParams = @{
 Start-Process @processParams
 
 if ($TranscriptLogging) {
-    Stop-Transcript
+    try {
+        Stop-Transcript
+    } catch {
+        # Transcript might not be started
+    }
 }
 
 if ($KeepWindowsOpen) {

@@ -1,11 +1,11 @@
 #SingleInstance Force
 ProcessSetPriority "High"
 
-DllPath := "C:\Scripts\VirtualDesktopAccessor.dll"
+global DllPath := "C:\Scripts\VirtualDesktopAccessor.dll"
 
 ; Load the Virtual Desktop Accessor DLL
 if !DllCall("LoadLibrary", "Str", DllPath) {
-    MsgBox "Failed to load VirtualDesktopAccessor.dll"
+    MsgBox "Failed to load VirtualDesktopAccessor.dll at: " DllPath
     ExitApp
 }
 
